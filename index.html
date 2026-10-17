@@ -52,8 +52,11 @@
             loadingState.classList.add('hidden');
             loadingState.classList.remove('flex');
             
+            // Clear the failsafe timeout since Google successfully responded
+            if (window.searchTimeout) clearTimeout(window.searchTimeout);
+            
             if (!results || results.length === 0) {
-                window.showError("We couldn't find any diagrams matching your search. Check your Google CSE Dashboard to ensure 'Search the entire web' and 'Image Search' are turned ON.");
+                window.showError("We couldn't find any images matching your search. Check your Google CSE Dashboard to ensure 'Search the entire web' and 'Image Search' are turned ON.");
                 return true;
             }
 
@@ -88,8 +91,8 @@
         }
     </script>
     
-    <!-- Load the User's exact Google Programmable Search Engine script -->
-    <script async src="https://cse.google.com/cse.js?cx=31e897332f91f4804"></script>
+    <!-- Load the User's exact NEW Google Programmable Search Engine script -->
+    <script async src="https://cse.google.com/cse.js?cx=51f78c001d0284c05"></script>
 
     <style>
         body {
@@ -221,7 +224,7 @@
             const rawQuery = input.value.trim();
             if (!rawQuery) return;
 
-            // Remove the hardcoded "diagram" filter so you get exactly what you search for!
+            // Using the raw query directly so you can search for "lion" normally
             const query = rawQuery;
 
             // UI loading state
@@ -234,35 +237,46 @@
             grid.innerHTML = ''; 
             featuredContainer.innerHTML = ''; 
 
-            try {
-                // Check if Google's script loaded at all (handles ad-blockers)
-                if (!window.google || !google.search || !google.search.cse) {
-                    window.showError("Google Search script is blocked. Please disable your ad-blocker or check your internet connection.");
+            // Failsafe timeout: Stop spinning if Google ghosted us after 8 seconds
+            if (window.searchTimeout) clearTimeout(window.searchTimeout);
+            window.searchTimeout = setTimeout(() => {
+                if (loadingState.classList.contains('flex')) {
+                    window.showError("Search timed out. Google may have blocked the request, or your daily search limit was reached.");
                     loadingState.classList.add('hidden');
                     loadingState.classList.remove('flex');
+                }
+            }, 8000);
+
+            try {
+                // Strict check in case ad-blockers stopped the script from loading entirely
+                if (!window.google || !google.search || !google.search.cse) {
+                    window.showError("Google Search script is blocked or still loading. Please disable your ad-blocker or try again in a second.");
+                    loadingState.classList.add('hidden');
+                    loadingState.classList.remove('flex');
+                    clearTimeout(window.searchTimeout);
                     return;
                 }
 
-                // Attempt to grab the hidden Google search engine
-                let element = google.search.cse.element.getElement('customImageSearch');
-                
-                // FALLBACK: If it hasn't initialized yet, force it to initialize right now
-                if (!element) {
-                    google.search.cse.element.render({
-                        div: 'hidden-cse',
-                        tag: 'search',
-                        gname: 'customImageSearch',
-                        attributes: { defaultToImageSearch: "true", disableWebSearch: "true" }
-                    });
-                    element = google.search.cse.element.getElement('customImageSearch');
-                }
+                // Programmatically trigger the hidden Google search engine
+                const element = google.search.cse.element.getElement('customImageSearch');
 
                 if (element) {
                     element.execute(query);
                 } else {
-                    window.showError("Google search engine failed to start. Please refresh the page.");
-                    loadingState.classList.add('hidden');
-                    loadingState.classList.remove('flex');
+                    // Fallback to force initialization if it missed the ready callback
+                    google.search.cse.element.render({
+                        div: 'hidden-cse',
+                        tag: 'search',
+                        gname: 'customImageSearch',
+                        attributes: {
+                            defaultToImageSearch: "true",
+                            disableWebSearch: "true"
+                        }
+                    });
+                    setTimeout(() => {
+                        const newElement = google.search.cse.element.getElement('customImageSearch');
+                        if (newElement) newElement.execute(query);
+                    }, 500);
                 }
             } catch (err) {
                 console.error("Search error:", err);
@@ -298,7 +312,7 @@
 
                 featuredContainer.innerHTML = `
                     <div class="bg-slate-800 rounded-lg border border-slate-700 shadow-md cursor-pointer overflow-hidden relative group" onclick="openLightbox(${featuredDataStr})">
-                        <img src="${featured.url}" alt="Featured Diagram" class="w-full h-48 sm:h-56 object-contain transition-transform duration-500 group-hover:scale-105">
+                        <img src="${featured.url}" alt="${featured.title}" class="w-full h-48 sm:h-56 object-contain transition-transform duration-500 group-hover:scale-105">
                     </div>
                 `;
                 featuredContainer.classList.remove('hidden');
@@ -315,7 +329,7 @@
                     itemDiv.className = 'bg-slate-800 rounded aspect-square border border-slate-700 cursor-pointer overflow-hidden relative group shadow-sm hover:shadow-md transition-shadow';
                     
                     itemDiv.innerHTML = `
-                        <img src="${img.url}" alt="Diagram thumbnail" loading="lazy" class="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110">
+                        <img src="${img.url}" alt="${img.title}" loading="lazy" class="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110">
                     `;
                     
                     // Swap to featured on click

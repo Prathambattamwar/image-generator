@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visuals - Image Search Engine</title>
     
-    <!-- SPEED OPTIMIZATIONS: Open connections to Google before the user even searches -->
     <link rel="preconnect" href="https://cse.google.com" crossorigin>
     <link rel="preconnect" href="https://www.google.com" crossorigin>
     <link rel="preconnect" href="https://encrypted-tbn0.gstatic.com" crossorigin>
@@ -15,11 +14,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <script>
-        // Setup Google Custom Search Engine interception BEFORE the script loads
         window.__gcse = {
-            parsetags: 'explicit', // Tell Google not to auto-render, we will control it
+            parsetags: 'explicit',
             initializationCallback: function() {
-                // Initialize the invisible search engine wrapper
                 google.search.cse.element.render({
                     div: 'hidden-cse',
                     tag: 'search',
@@ -31,13 +28,11 @@
                 });
             },
             searchCallbacks: {
-                // Intercept Image Search Results
                 image: {
                     ready: function(name, q, promos, results) {
                         return handleGoogleResults(results);
                     }
                 },
-                // Intercept Web Search Results just in case your CSE settings default to web
                 web: {
                     ready: function(name, q, promos, results) {
                         return handleGoogleResults(results);
@@ -46,25 +41,22 @@
             }
         };
 
-        // This function processes the raw data from Google and injects it into your custom UI
         function handleGoogleResults(results) {
             const loadingState = document.getElementById('loading-state');
             loadingState.classList.add('hidden');
             loadingState.classList.remove('flex');
             
-            // Clear the failsafe timeout since Google successfully responded
+            // Clear the 8-second failsafe timeout since it was successful
             if (window.searchTimeout) clearTimeout(window.searchTimeout);
+            localStorage.setItem('retryCount', '0'); // Reset retries on success
             
             if (!results || results.length === 0) {
-                window.showError("We couldn't find any images matching your search. Check your Google CSE Dashboard to ensure 'Search the entire web' and 'Image Search' are turned ON.");
+                window.showError("We couldn't find any images for this search on your selected sites.");
                 return true;
             }
 
-            // Map Google's result object into the format your UI expects
             const images = results.map(res => {
                 let imgUrl = '';
-                
-                // Extract best available image URL from various Google properties
                 if (res.unescapedUrl) imgUrl = res.unescapedUrl;
                 else if (res.originalImageUrl) imgUrl = res.originalImageUrl;
                 else if (res.image && res.image.url) imgUrl = res.image.url;
@@ -78,133 +70,91 @@
                     width: 800,
                     height: 600
                 };
-            }).filter(img => img.url); // Ensure we only keep results that have valid image URLs
+            }).filter(img => img.url);
 
             if (images.length === 0) {
                 window.showError("Could not extract image thumbnails from the results.");
             } else {
                 window.renderImages(images);
             }
-            
-            // Returning true tells Google NOT to draw its own standard UI
             return true; 
         }
+
+        // ALL 10 ENGINE IDs
+        const engineIDs = [
+            '51f78c001d0284c05',
+            '15bef143bf9644633',
+            '8454339fb70f546cc',
+            '141c268497aa443c0',
+            '0510da4168de24c6b',
+            '21c0a96a3d61045ab',
+            '154bfa638b3a0471e',
+            '330e6ea160a5a4558',
+            '710187d765e324b4d',
+            'c008c5b51c3294820'
+        ];
+
+        let currentEngineIndex = parseInt(localStorage.getItem('activeEngineIndex')) || 0;
+
+        const gcseScript = document.createElement('script');
+        gcseScript.type = 'text/javascript';
+        gcseScript.async = true;
+        gcseScript.src = `https://cse.google.com/cse.js?cx=${engineIDs[currentEngineIndex]}`;
+        document.head.appendChild(gcseScript);
     </script>
-    
-    <!-- Load the User's exact NEW Google Programmable Search Engine script -->
-    <script async src="https://cse.google.com/cse.js?cx=51f78c001d0284c05"></script>
 
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* slate-900 */
-            color: #f8fafc; /* slate-50 */
+            background-color: #0f172a;
+            color: #f8fafc;
         }
-        
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
-        
-        /* Modal Transitions */
-        .modal-enter { opacity: 0; }
-        .modal-enter-active { opacity: 1; transition: opacity 0.3s ease-out; }
-        .modal-exit { opacity: 1; }
-        .modal-exit-active { opacity: 0; transition: opacity 0.2s ease-in; }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-slate-950 antialiased p-4">
+<body class="min-h-screen flex flex-col items-center justify-center bg-slate-950 antialiased p-4">
 
-    <!-- Hidden container where the Google engine secretly lives -->
-    <div id="hidden-cse" style="display: none;"></div>
+    <!-- HIDDEN GOOGLE INTERFACE -->
+    <div id="hidden-cse" class="hidden"></div>
 
-    <!-- App Window Container matching the sketch -->
-    <div class="w-full max-w-md h-[85vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl flex flex-col relative overflow-hidden">
+    <!-- App Window -->
+    <div class="w-full max-w-md h-[70vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl flex flex-col relative overflow-hidden">
         
-        <!-- Header (Window style) -->
         <header class="flex justify-between items-center p-3 border-b border-slate-700 bg-slate-800/50">
             <h1 class="text-slate-200 font-medium tracking-wide text-sm">images</h1>
-            <div class="flex items-center gap-3 text-slate-400">
-                <button class="hover:text-white transition-colors" title="Minimize">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"></path></svg>
-                </button>
-                <button class="hover:text-white transition-colors" title="Close">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"></path></svg>
-                </button>
-            </div>
         </header>
 
-        <!-- Main Content Area -->
         <main class="flex-grow overflow-y-auto p-4 flex flex-col gap-6" id="main-content">
-            
-            <!-- Loading State -->
             <div id="loading-state" class="hidden flex-col items-center justify-center py-20 flex-grow">
                 <svg class="animate-spin h-8 w-8 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 <p class="text-slate-400 text-sm animate-pulse">Generating Image...</p>
             </div>
             
-            <!-- Error / Empty State -->
             <div id="error-state" class="hidden flex-col items-center justify-center py-10 text-center flex-grow">
-                <p class="text-slate-400 text-sm" id="error-message">No images found.</p>
+                <p class="text-red-400 text-sm font-bold" id="error-message">No images found.</p>
             </div>
 
-            <!-- Featured Image (Most relevant) -->
-            <div id="featured-container" class="hidden">
-                <!-- Injected via JS -->
-            </div>
-
-            <!-- Image Grid (Other relevant) -->
-            <div id="image-grid" class="hidden">
-                <!-- Injected via JS -->
-            </div>
+            <div id="featured-container" class="hidden"></div>
+            <div id="image-grid" class="hidden"></div>
         </main>
 
-        <!-- Bottom Search Bar -->
         <footer class="p-3 border-t border-slate-700 bg-slate-800/80 backdrop-blur-sm shrink-0">
             <form id="search-form" class="flex items-center gap-2">
-                <div class="flex-grow flex items-center bg-slate-900 border border-slate-600 rounded-md overflow-hidden focus-within:border-blue-500 transition-colors">
+                <div class="flex-grow flex items-center bg-slate-900 border border-slate-600 rounded-md overflow-hidden">
                     <span class="pl-3 pr-1 text-slate-400 text-sm font-medium select-none">Search</span>
-                    <input 
-                        type="text" 
-                        id="search-input" 
-                        class="w-full p-2 bg-transparent text-white text-sm outline-none" 
-                        placeholder="..." 
-                        required
-                        autocomplete="off"
-                    >
+                    <input type="text" id="search-input" class="w-full p-2 bg-transparent text-white text-sm outline-none" placeholder="Try searching 'cell' or 'heart'..." required autocomplete="off">
                     <button type="submit" class="p-2 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors border-l border-slate-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 256 256"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"></path></svg>
+                        Search
                     </button>
                 </div>
-                <!-- Mic Button -->
-                <button type="button" class="p-2 rounded-md bg-slate-800 border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors flex-shrink-0" title="Voice Search (Demo)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M128,176a48.05,48.05,0,0,0,48-48V64a48,48,0,0,0-96,0v64A48.05,48.05,0,0,0,128,176ZM96,64a32,32,0,0,1,64,0v64a32,32,0,0,1-64,0Zm104,64a8,8,0,0,1-16,0,56,56,0,0,1-112,0,8,8,0,0,1-16,0,72,72,0,0,0,64,71.49V232a8,8,0,0,0,16,0V199.49A72,72,0,0,0,200,128Z"></path></svg>
-                </button>
             </form>
         </footer>
     </div>
 
-    <!-- Lightbox Modal -->
-    <div id="lightbox" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
-        <!-- Close Button -->
-        <button id="close-lightbox" class="absolute top-4 right-4 md:top-6 md:right-6 p-2 bg-slate-800/50 hover:bg-slate-800 rounded-full text-white transition-colors z-50">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"></path></svg>
-        </button>
-        
-        <!-- Image Container -->
-        <div class="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
-            <div class="relative w-full h-full flex justify-center items-center">
-                <div id="modal-loader" class="absolute inset-0 flex items-center justify-center">
-                     <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                </div>
-                <img id="lightbox-img" src="" alt="Full screen preview" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl relative z-10 hidden">
-            </div>
-        </div>
-    </div>
-
     <script>
-        // DOM Elements
         const form = document.getElementById('search-form');
         const input = document.getElementById('search-input');
         const grid = document.getElementById('image-grid');
@@ -213,190 +163,92 @@
         const errorState = document.getElementById('error-state');
         const errorMessage = document.getElementById('error-message');
 
-        const lightbox = document.getElementById('lightbox');
-        const lightboxImg = document.getElementById('lightbox-img');
-        const closeLightboxBtn = document.getElementById('close-lightbox');
-        const modalLoader = document.getElementById('modal-loader');
-
-        // Form Submission triggers Google Programmable Search Programmatically
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            const rawQuery = input.value.trim();
-            if (!rawQuery) return;
+            const query = input.value.trim();
+            if (!query) return;
 
-            // Using the raw query directly so you can search for "lion" normally
-            const query = rawQuery;
-
-            // UI loading state
             grid.classList.add('hidden');
             featuredContainer.classList.add('hidden');
             errorState.classList.add('hidden');
+            
             loadingState.classList.remove('hidden');
             loadingState.classList.add('flex');
             
-            grid.innerHTML = ''; 
-            featuredContainer.innerHTML = ''; 
-
-            // Failsafe timeout: Stop spinning if Google ghosted us after 8 seconds
             if (window.searchTimeout) clearTimeout(window.searchTimeout);
+            
+            // Failsafe: If no results return in 8 seconds, swap engine silently and retry
             window.searchTimeout = setTimeout(() => {
                 if (loadingState.classList.contains('flex')) {
-                    window.showError("Search timed out. Google may have blocked the request, or your daily search limit was reached.");
-                    loadingState.classList.add('hidden');
-                    loadingState.classList.remove('flex');
+                    currentEngineIndex = (currentEngineIndex + 1) % engineIDs.length;
+                    localStorage.setItem('activeEngineIndex', currentEngineIndex);
+                    
+                    let retries = parseInt(localStorage.getItem('retryCount')) || 0;
+                    if (retries >= engineIDs.length) {
+                        window.showError("All 10 engines failed! No results could be fetched.");
+                        localStorage.setItem('retryCount', '0');
+                        return; // Stop trying if we looped through all 10
+                    }
+                    
+                    // Save query and reload page to try next engine
+                    localStorage.setItem('retryCount', retries + 1);
+                    localStorage.setItem('autoRetryQuery', query);
+                    window.location.reload();
                 }
             }, 8000);
 
             try {
-                // Strict check in case ad-blockers stopped the script from loading entirely
-                if (!window.google || !google.search || !google.search.cse) {
-                    window.showError("Google Search script is blocked or still loading. Please disable your ad-blocker or try again in a second.");
-                    loadingState.classList.add('hidden');
-                    loadingState.classList.remove('flex');
-                    clearTimeout(window.searchTimeout);
-                    return;
-                }
-
-                // Programmatically trigger the hidden Google search engine
                 const element = google.search.cse.element.getElement('customImageSearch');
-
                 if (element) {
                     element.execute(query);
-                } else {
-                    // Fallback to force initialization if it missed the ready callback
-                    google.search.cse.element.render({
-                        div: 'hidden-cse',
-                        tag: 'search',
-                        gname: 'customImageSearch',
-                        attributes: {
-                            defaultToImageSearch: "true",
-                            disableWebSearch: "true"
-                        }
-                    });
-                    setTimeout(() => {
-                        const newElement = google.search.cse.element.getElement('customImageSearch');
-                        if (newElement) newElement.execute(query);
-                    }, 500);
-                }
+                } 
             } catch (err) {
-                console.error("Search error:", err);
-                window.showError("An error occurred executing the custom Google search.");
-                loadingState.classList.add('hidden');
-                loadingState.classList.remove('flex');
+                console.error(err);
             }
         });
 
-        let appImages = [];
-
-        // Global functions accessible by the __gcse callback in the <head>
         window.renderImages = function(images) {
-            appImages = images;
-            updateLayout();
+            grid.innerHTML = '';
+            featuredContainer.innerHTML = '';
+            
+            if(images.length > 0) {
+                const featured = images[0];
+                featuredContainer.innerHTML = `<img src="${featured.url}" class="w-full h-48 object-contain bg-slate-800 rounded shadow-md border border-slate-700">`;
+                featuredContainer.classList.remove('hidden');
+            }
+            
+            if(images.length > 1) {
+                grid.className = 'grid grid-cols-3 gap-2 mt-4';
+                images.slice(1, 7).forEach(img => {
+                    const imgDiv = document.createElement('div');
+                    imgDiv.className = 'aspect-square bg-slate-800 rounded overflow-hidden border border-slate-700 relative group cursor-pointer';
+                    imgDiv.innerHTML = `<img src="${img.url}" alt="${img.title}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">`;
+                    grid.appendChild(imgDiv);
+                });
+                grid.classList.remove('hidden');
+            }
         }
 
         window.showError = function(message) {
             errorMessage.textContent = message;
             errorState.classList.remove('hidden');
             errorState.classList.add('flex');
-            grid.classList.add('hidden');
-            featuredContainer.classList.add('hidden');
+            loadingState.classList.add('hidden');
+            loadingState.classList.remove('flex');
         }
 
-        function updateLayout() {
-            grid.innerHTML = '';
-            featuredContainer.innerHTML = '';
-            
-            if (appImages.length > 0) {
-                const featured = appImages[0];
-                const featuredDataStr = JSON.stringify(featured).replace(/'/g, "\\'").replace(/"/g, "&quot;");
-
-                featuredContainer.innerHTML = `
-                    <div class="bg-slate-800 rounded-lg border border-slate-700 shadow-md cursor-pointer overflow-hidden relative group" onclick="openLightbox(${featuredDataStr})">
-                        <img src="${featured.url}" alt="${featured.title}" class="w-full h-48 sm:h-56 object-contain transition-transform duration-500 group-hover:scale-105">
-                    </div>
-                `;
-                featuredContainer.classList.remove('hidden');
-            }
-
-            if (appImages.length > 1) {
-                const actualGrid = document.createElement('div');
-                actualGrid.className = 'grid grid-cols-3 gap-2'; 
-
-                // Limit to 6 images as drawn
-                const otherImagesLimit = 6;
-                appImages.slice(1, otherImagesLimit + 1).forEach((img, index) => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'bg-slate-800 rounded aspect-square border border-slate-700 cursor-pointer overflow-hidden relative group shadow-sm hover:shadow-md transition-shadow';
-                    
-                    itemDiv.innerHTML = `
-                        <img src="${img.url}" alt="${img.title}" loading="lazy" class="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110">
-                    `;
-                    
-                    // Swap to featured on click
-                    itemDiv.addEventListener('click', () => {
-                        const clickedIndex = index + 1; 
-                        const temp = appImages[0];
-                        appImages[0] = appImages[clickedIndex];
-                        appImages[clickedIndex] = temp;
-                        
-                        updateLayout();
-                        
-                        const mainContent = document.getElementById('main-content');
-                        mainContent.scrollTo({ top: 0, behavior: 'smooth' });
-                    });
-                    actualGrid.appendChild(itemDiv);
-                });
-                
-                grid.appendChild(actualGrid);
-                grid.classList.remove('hidden');
-            }
-        }
-
-        // Global for inline onclick
-        window.openLightbox = function(imgData) {
-            lightboxImg.src = ''; 
-            lightboxImg.classList.add('hidden');
-            modalLoader.classList.remove('hidden');
-            
-            lightbox.classList.remove('hidden');
-            void lightbox.offsetWidth;
-            lightbox.classList.remove('opacity-0');
-            lightbox.classList.add('opacity-100');
-            document.body.style.overflow = 'hidden'; 
-
-            const highResImg = new Image();
-            highResImg.onload = function() {
-                lightboxImg.src = this.src;
-                modalLoader.classList.add('hidden');
-                lightboxImg.classList.remove('hidden');
-            };
-            highResImg.src = imgData.url;
-        }
-
-        function closeLightbox() {
-            lightbox.classList.remove('opacity-100');
-            lightbox.classList.add('opacity-0');
-            setTimeout(() => {
-                lightbox.classList.add('hidden');
-                lightboxImg.src = '';
-                document.body.style.overflow = ''; 
-            }, 300);
-        }
-
-        closeLightboxBtn.addEventListener('click', closeLightbox);
-        lightbox.addEventListener('click', (e) => {
-            if (e.target === lightbox || e.target.closest('.relative.w-full') === e.target) {
-                closeLightbox();
-            }
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !lightbox.classList.contains('hidden')) {
-                closeLightbox();
-            }
-        });
-
+        // Check if we need to auto-retry a search after a page reload (Engine Swap)
         window.addEventListener('DOMContentLoaded', () => {
-            input.focus();
+            const autoQuery = localStorage.getItem('autoRetryQuery');
+            if (autoQuery) {
+                input.value = autoQuery;
+                localStorage.removeItem('autoRetryQuery');
+                
+                // Wait slightly for Google script to initialize, then trigger search
+                setTimeout(() => {
+                    form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                }, 500);
+            }
         });
     </script>
 </body>

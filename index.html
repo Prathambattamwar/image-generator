@@ -80,7 +80,6 @@
             return true; 
         }
 
-        // ALL 10 ENGINE IDs
         const engineIDs = [
             '51f78c001d0284c05',
             '15bef143bf9644633',
@@ -95,6 +94,7 @@
         ];
 
         let currentEngineIndex = parseInt(localStorage.getItem('activeEngineIndex')) || 0;
+        console.log(`[Tracker] Page loaded using Engine #${currentEngineIndex + 1} (ID: ${engineIDs[currentEngineIndex]})`);
 
         const gcseScript = document.createElement('script');
         gcseScript.type = 'text/javascript';
@@ -117,8 +117,8 @@
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center bg-slate-950 antialiased p-4">
 
-    <!-- HIDDEN GOOGLE INTERFACE -->
-    <div id="hidden-cse" class="hidden"></div>
+    <!-- HIDDEN GOOGLE INTERFACE (Kept completely hidden) -->
+    <div id="hidden-cse" class="hidden" style="display: none;"></div>
 
     <!-- App Window -->
     <div class="w-full max-w-md h-[70vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl flex flex-col relative overflow-hidden">
@@ -128,6 +128,7 @@
         </header>
 
         <main class="flex-grow overflow-y-auto p-4 flex flex-col gap-6" id="main-content">
+            
             <div id="loading-state" class="hidden flex-col items-center justify-center py-20 flex-grow">
                 <svg class="animate-spin h-8 w-8 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 <p class="text-slate-400 text-sm animate-pulse">Generating Image...</p>
@@ -154,6 +155,12 @@
         </footer>
     </div>
 
+    <!-- Lightbox Modal -->
+    <div id="lightbox-modal" class="fixed inset-0 bg-black/90 z-50 hidden flex-col items-center justify-center backdrop-blur-sm transition-opacity duration-300 opacity-0 cursor-pointer" onclick="window.closeLightbox()">
+        <button id="close-lightbox-btn" class="absolute top-4 right-4 text-white hover:text-red-400 p-2 text-4xl">&times;</button>
+        <img id="lightbox-modal-img" src="" class="max-w-[95%] max-h-[90vh] object-contain rounded-md shadow-2xl cursor-default" onclick="event.stopPropagation()">
+    </div>
+
     <script>
         const form = document.getElementById('search-form');
         const input = document.getElementById('search-input');
@@ -162,6 +169,29 @@
         const loadingState = document.getElementById('loading-state');
         const errorState = document.getElementById('error-state');
         const errorMessage = document.getElementById('error-message');
+        
+        const lightbox = document.getElementById('lightbox-modal');
+        const lightboxImg = document.getElementById('lightbox-modal-img');
+        const closeLightboxBtn = document.getElementById('close-lightbox-btn');
+
+        window.openLightbox = function(src) {
+            lightboxImg.src = src;
+            lightbox.classList.remove('hidden');
+            lightbox.classList.add('flex');
+            setTimeout(() => lightbox.classList.remove('opacity-0'), 10);
+        };
+
+        window.closeLightbox = function() {
+            lightbox.classList.add('opacity-0');
+            setTimeout(() => {
+                lightbox.classList.add('hidden');
+                lightbox.classList.remove('flex');
+            }, 300);
+        };
+
+        if (closeLightboxBtn) {
+            closeLightboxBtn.addEventListener('click', window.closeLightbox);
+        }
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -180,17 +210,21 @@
             // Failsafe: If no results return in 8 seconds, swap engine silently and retry
             window.searchTimeout = setTimeout(() => {
                 if (loadingState.classList.contains('flex')) {
+                    console.log(`[Tracker] Engine #${currentEngineIndex + 1} timed out or failed! Swapping...`);
+                    
                     currentEngineIndex = (currentEngineIndex + 1) % engineIDs.length;
                     localStorage.setItem('activeEngineIndex', currentEngineIndex);
+                    
+                    console.log(`[Tracker] Swapped to new Engine #${currentEngineIndex + 1}. Reloading page to try again...`);
                     
                     let retries = parseInt(localStorage.getItem('retryCount')) || 0;
                     if (retries >= engineIDs.length) {
                         window.showError("All 10 engines failed! No results could be fetched.");
                         localStorage.setItem('retryCount', '0');
-                        return; // Stop trying if we looped through all 10
+                        return; 
                     }
                     
-                    // Save query and reload page to try next engine
+                    // Save query and silently reload page to try next engine
                     localStorage.setItem('retryCount', retries + 1);
                     localStorage.setItem('autoRetryQuery', query);
                     window.location.reload();
@@ -213,8 +247,13 @@
             
             if(images.length > 0) {
                 const featured = images[0];
-                featuredContainer.innerHTML = `<img src="${featured.url}" class="w-full h-48 object-contain bg-slate-800 rounded shadow-md border border-slate-700">`;
+                featuredContainer.innerHTML = `<img id="main-featured-img" src="${featured.url}" class="w-full h-48 object-contain bg-slate-800 rounded shadow-md border border-slate-700 cursor-pointer hover:opacity-90 transition-opacity" title="Click to view full screen">`;
                 featuredContainer.classList.remove('hidden');
+
+                // Lightbox trigger for the featured image
+                document.getElementById('main-featured-img').addEventListener('click', function() {
+                    openLightbox(this.src);
+                });
             }
             
             if(images.length > 1) {
@@ -222,7 +261,24 @@
                 images.slice(1, 7).forEach(img => {
                     const imgDiv = document.createElement('div');
                     imgDiv.className = 'aspect-square bg-slate-800 rounded overflow-hidden border border-slate-700 relative group cursor-pointer';
-                    imgDiv.innerHTML = `<img src="${img.url}" alt="${img.title}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">`;
+                    
+                    const thumbnail = document.createElement('img');
+                    thumbnail.src = img.url;
+                    thumbnail.alt = img.title;
+                    thumbnail.className = 'w-full h-full object-cover group-hover:scale-110 transition-transform duration-300';
+                    
+                    // Swap logic: Thumbnail click updates the Featured Image
+                    imgDiv.addEventListener('click', () => {
+                        const featuredElement = document.getElementById('main-featured-img');
+                        if (featuredElement) {
+                            // Swap their image sources
+                            const tempSrc = featuredElement.src;
+                            featuredElement.src = thumbnail.src;
+                            thumbnail.src = tempSrc;
+                        }
+                    });
+
+                    imgDiv.appendChild(thumbnail);
                     grid.appendChild(imgDiv);
                 });
                 grid.classList.remove('hidden');
@@ -237,17 +293,25 @@
             loadingState.classList.remove('flex');
         }
 
-        // Check if we need to auto-retry a search after a page reload (Engine Swap)
         window.addEventListener('DOMContentLoaded', () => {
             const autoQuery = localStorage.getItem('autoRetryQuery');
             if (autoQuery) {
                 input.value = autoQuery;
                 localStorage.removeItem('autoRetryQuery');
                 
-                // Wait slightly for Google script to initialize, then trigger search
+                loadingState.classList.remove('hidden');
+                loadingState.classList.add('flex');
+                
+                // Wait slightly for Google script to initialize, then trigger search automatically
                 setTimeout(() => {
-                    form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                }, 500);
+                    const element = google.search.cse.element.getElement('customImageSearch');
+                    if (element) {
+                        element.execute(autoQuery);
+                    } else {
+                        // Fallback trigger if element isn't quite ready
+                        form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    }
+                }, 800); 
             }
         });
     </script>
